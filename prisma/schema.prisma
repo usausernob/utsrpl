@@ -25,15 +25,30 @@ enum StatusPinjaman {
   DITOLAK
 }
 
+enum NamaRuangan {
+  LAB_RPL
+  LAB_JARKOM
+  LAB_MM
+  LAB_SI
+}
+
+enum StatusBooking {
+  PENDING
+  APPROVED
+  COMPLETED
+  REJECTED
+}
+
 model User {
-  id        String      @id @default(cuid())
-  nama      String
-  email     String      @unique
-  password  String
-  role      Role        @default(MAHASISWA)
-  borrowings Borrowing[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id           String        @id @default(cuid())
+  nama         String
+  email        String        @unique
+  password     String
+  role         Role          @default(MAHASISWA)
+  borrowings   Borrowing[]
+  roomBookings RoomBooking[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model Asset {
@@ -49,13 +64,27 @@ model Asset {
 }
 
 model Borrowing {
-  id        String         @id @default(cuid())
-  userId    String
-  assetId   String
-  tglPinjam DateTime       @default(now())
-  status    StatusPinjaman @default(PENDING)
-  user      User           @relation(fields: [userId], references: [id])
-  asset     Asset          @relation(fields: [assetId], references: [id])
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id           String         @id @default(cuid())
+  userId       String
+  assetId      String
+  tglPinjam    DateTime       @default(now())
+  returnedDate DateTime?
+  status       StatusPinjaman @default(PENDING)
+  user         User           @relation(fields: [userId], references: [id])
+  asset        Asset          @relation(fields: [assetId], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model RoomBooking {
+  id          String        @id @default(uuid())
+  userId      String
+  roomName    NamaRuangan
+  bookingDate DateTime
+  startTime   String
+  endTime     String
+  status      StatusBooking @default(PENDING)
+  user        User          @relation(fields: [userId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }

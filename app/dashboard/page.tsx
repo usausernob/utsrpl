@@ -3,6 +3,8 @@ import { authOptions } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { redirect } from "next/navigation";
 import AdminActions from "@/app/components/AdminActions";
+import ReturnButton from "@/app/components/ReturnButton";
+import BookingAdminActions from "@/app/components/BookingAdminActions";
 import {
     LayoutDashboard,
     Clock,
@@ -13,9 +15,14 @@ import {
     ShieldCheck,
     Users,
     Inbox,
+    DoorOpen,
+    RotateCcw,
+    CalendarDays,
 } from "lucide-react";
 
-const statusConfig = {
+export const dynamic = "force-dynamic";
+
+const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
     PENDING: {
         label: "Pending",
         color: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -27,7 +34,7 @@ const statusConfig = {
         icon: ArrowRightLeft,
     },
     SELESAI: {
-        label: "Selesai",
+        label: "Dikembalikan",
         color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
         icon: CheckCircle2,
     },
@@ -36,6 +43,36 @@ const statusConfig = {
         color: "bg-red-500/10 text-red-600 dark:text-red-400",
         icon: XCircle,
     },
+};
+
+const bookingStatusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
+    PENDING: {
+        label: "Pending",
+        color: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        icon: Clock,
+    },
+    APPROVED: {
+        label: "Disetujui",
+        color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+        icon: CheckCircle2,
+    },
+    COMPLETED: {
+        label: "Selesai",
+        color: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+        icon: CheckCircle2,
+    },
+    REJECTED: {
+        label: "Ditolak",
+        color: "bg-red-500/10 text-red-600 dark:text-red-400",
+        icon: XCircle,
+    },
+};
+
+const roomLabels: Record<string, string> = {
+    LAB_RPL: "Lab RPL",
+    LAB_JARKOM: "Lab Jarkom",
+    LAB_MM: "Lab MM",
+    LAB_SI: "Lab SI",
 };
 
 export default async function DashboardPage() {
@@ -48,6 +85,9 @@ export default async function DashboardPage() {
     const isAdmin =
         session.user.role === "LABORAN" || session.user.role === "KEPALA_LAB";
 
+    // ──────────────────────────────────────────────────
+    // ADMIN VIEW
+    // ──────────────────────────────────────────────────
     if (isAdmin) {
         const pendingBorrowings = await prisma.borrowing.findMany({
             where: { status: "PENDING" },
@@ -57,6 +97,35 @@ export default async function DashboardPage() {
             },
             orderBy: { tglPinjam: "desc" },
         });
+
+        const borrowedItems = await prisma.borrowing.findMany({
+            where: { status: "DIPINJAM" },
+            include: {
+                user: { select: { nama: true, email: true } },
+                asset: { select: { namaAlat: true, barcode: true } },
+            },
+            orderBy: { tglPinjam: "desc" },
+        });
+
+        const pendingBookings = await prisma.roomBooking.findMany({
+            where: { status: "PENDING" },
+            include: {
+                user: { select: { nama: true, email: true } },
+            },
+            orderBy: { bookingDate: "desc" },
+        });
+
+        let allBookings: Awaited<ReturnType<typeof prisma.roomBooking.findMany>> = [];
+        try {
+            allBookings = await prisma.roomBooking.findMany({
+                include: {
+                    user: { select: { nama: true, email: true } },
+                },
+                orderBy: { bookingDate: "desc" },
+            });
+        } catch (e) {
+            console.error("Error fetching allBookings:", e);
+        }
 
         return (
             <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -71,44 +140,51 @@ export default async function DashboardPage() {
                                 Dashboard Admin
                             </h1>
                             <p className="text-sm text-muted">
-                                Kelola peminjaman alat laboratorium
+                                Kelola peminjaman alat & booking ruangan laboratorium
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {/* Stats */}
-                <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
                     <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10">
                                 <Inbox className="h-5 w-5 text-amber-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-foreground">
-                                    {pendingBorrowings.length}
-                                </p>
-                                <p className="text-xs text-muted">Antrean Pending</p>
+                                <p className="text-2xl font-bold text-foreground">{pendingBorrowings.length}</p>
+                                <p className="text-xs text-muted">Antrean Alat</p>
                             </div>
                         </div>
                     </div>
                     <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                                <Users className="h-5 w-5 text-primary" />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
+                                <ArrowRightLeft className="h-5 w-5 text-blue-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-foreground">
-                                    {new Set(pendingBorrowings.map((b) => b.userId)).size}
-                                </p>
-                                <p className="text-xs text-muted">Pemohon Unik</p>
+                                <p className="text-2xl font-bold text-foreground">{borrowedItems.length}</p>
+                                <p className="text-xs text-muted">Sedang Dipinjam</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
+                                <DoorOpen className="h-5 w-5 text-purple-500" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-foreground">{pendingBookings.length}</p>
+                                <p className="text-xs text-muted">Antrean Booking</p>
                             </div>
                         </div>
                     </div>
                     <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                                <LayoutDashboard className="h-5 w-5 text-emerald-500" />
+                                <Users className="h-5 w-5 text-emerald-500" />
                             </div>
                             <div>
                                 <p className="text-2xl font-bold text-foreground capitalize">
@@ -120,27 +196,20 @@ export default async function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Pending Table */}
-                <div className="rounded-2xl border border-border bg-surface shadow-sm">
+                {/* ── TABLE 1: Pending Equipment Requests ── */}
+                <div className="mb-8 rounded-2xl border border-border bg-surface shadow-sm">
                     <div className="border-b border-border px-6 py-4">
                         <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
                             <AlertCircle className="h-5 w-5 text-amber-500" />
-                            Antrean Peminjaman
+                            Antrean Peminjaman Alat
                         </h2>
-                        <p className="text-sm text-muted">
-                            Daftar permintaan peminjaman yang menunggu persetujuan
-                        </p>
+                        <p className="text-sm text-muted">Permintaan peminjaman yang menunggu persetujuan</p>
                     </div>
-
                     {pendingBorrowings.length === 0 ? (
                         <div className="flex flex-col items-center py-16">
                             <Inbox className="mb-3 h-10 w-10 text-muted/40" />
-                            <p className="font-medium text-foreground">
-                                Tidak Ada Antrean
-                            </p>
-                            <p className="text-sm text-muted">
-                                Semua permintaan telah diproses.
-                            </p>
+                            <p className="font-medium text-foreground">Tidak Ada Antrean</p>
+                            <p className="text-sm text-muted">Semua permintaan telah diproses.</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -156,34 +225,17 @@ export default async function DashboardPage() {
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {pendingBorrowings.map((b) => (
-                                        <tr
-                                            key={b.id}
-                                            className="transition-colors hover:bg-surface-hover/30"
-                                        >
+                                        <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
                                             <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="text-sm font-semibold text-foreground">
-                                                        {b.user.nama}
-                                                    </p>
-                                                    <p className="text-xs text-muted">{b.user.email}</p>
-                                                </div>
+                                                <p className="text-sm font-semibold text-foreground">{b.user.nama}</p>
+                                                <p className="text-xs text-muted">{b.user.email}</p>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="text-sm font-medium text-foreground">
-                                                        {b.asset.namaAlat}
-                                                    </p>
-                                                    <p className="font-mono text-xs text-muted">
-                                                        {b.asset.barcode}
-                                                    </p>
-                                                </div>
+                                                <p className="text-sm font-medium text-foreground">{b.asset.namaAlat}</p>
+                                                <p className="font-mono text-xs text-muted">{b.asset.barcode}</p>
                                             </td>
                                             <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
-                                                {new Date(b.tglPinjam).toLocaleDateString("id-ID", {
-                                                    day: "numeric",
-                                                    month: "short",
-                                                    year: "numeric",
-                                                })}
+                                                {new Date(b.tglPinjam).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
@@ -201,17 +253,214 @@ export default async function DashboardPage() {
                         </div>
                     )}
                 </div>
+
+                {/* ── TABLE 2: Borrowed Equipment ── */}
+                <div className="mb-8 rounded-2xl border border-border bg-surface shadow-sm">
+                    <div className="border-b border-border px-6 py-4">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <RotateCcw className="h-5 w-5 text-blue-500" />
+                            Alat Sedang Dipinjam
+                        </h2>
+                        <p className="text-sm text-muted">Tandai jika alat sudah dikembalikan</p>
+                    </div>
+                    {borrowedItems.length === 0 ? (
+                        <div className="flex flex-col items-center py-16">
+                            <CheckCircle2 className="mb-3 h-10 w-10 text-muted/40" />
+                            <p className="font-medium text-foreground">Semua Alat Kembali</p>
+                            <p className="text-sm text-muted">Tidak ada alat yang sedang dipinjam.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-border bg-surface-hover/50 text-left text-xs font-semibold uppercase tracking-wider text-muted">
+                                        <th className="px-6 py-3">Peminjam</th>
+                                        <th className="px-6 py-3">Alat</th>
+                                        <th className="px-6 py-3">Tgl Pinjam</th>
+                                        <th className="px-6 py-3">Status</th>
+                                        <th className="px-6 py-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {borrowedItems.map((b) => (
+                                        <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm font-semibold text-foreground">{b.user.nama}</p>
+                                                <p className="text-xs text-muted">{b.user.email}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm font-medium text-foreground">{b.asset.namaAlat}</p>
+                                                <p className="font-mono text-xs text-muted">{b.asset.barcode}</p>
+                                            </td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {new Date(b.tglPinjam).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                                    <ArrowRightLeft className="h-3 w-3" />
+                                                    Dipinjam
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <ReturnButton borrowingId={b.id} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── TABLE 3: Pending Room Booking Requests ── */}
+                <div className="mb-8 rounded-2xl border border-border bg-surface shadow-sm">
+                    <div className="border-b border-border px-6 py-4">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <DoorOpen className="h-5 w-5 text-purple-500" />
+                            Antrean Booking Ruangan
+                        </h2>
+                        <p className="text-sm text-muted">Permintaan booking ruangan yang menunggu persetujuan</p>
+                    </div>
+                    {pendingBookings.length === 0 ? (
+                        <div className="flex flex-col items-center py-16">
+                            <Inbox className="mb-3 h-10 w-10 text-muted/40" />
+                            <p className="font-medium text-foreground">Tidak Ada Antrean</p>
+                            <p className="text-sm text-muted">Semua booking telah diproses.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-border bg-surface-hover/50 text-left text-xs font-semibold uppercase tracking-wider text-muted">
+                                        <th className="px-6 py-3">Pemohon</th>
+                                        <th className="px-6 py-3">Ruangan</th>
+                                        <th className="px-6 py-3">Tanggal</th>
+                                        <th className="px-6 py-3">Waktu</th>
+                                        <th className="px-6 py-3">Status</th>
+                                        <th className="px-6 py-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {pendingBookings.map((b) => (
+                                        <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm font-semibold text-foreground">{b.user.nama}</p>
+                                                <p className="text-xs text-muted">{b.user.email}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                                    <DoorOpen className="h-3 w-3" />
+                                                    {roomLabels[b.roomName] || b.roomName}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {new Date(b.bookingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                            </td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {b.startTime} — {b.endTime}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                                    <Clock className="h-3 w-3" />
+                                                    Pending
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <BookingAdminActions bookingId={b.id} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── TABLE 4: All Room Booking History ── */}
+                <div className="rounded-2xl border border-border bg-surface shadow-sm">
+                    <div className="border-b border-border px-6 py-4">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <CalendarDays className="h-5 w-5 text-indigo-500" />
+                            Riwayat Booking Ruangan
+                        </h2>
+                        <p className="text-sm text-muted">
+                            Semua riwayat pemesanan ruangan laboratorium untuk monitoring
+                        </p>
+                    </div>
+                    {allBookings.length === 0 ? (
+                        <div className="flex flex-col items-center py-16">
+                            <DoorOpen className="mb-3 h-10 w-10 text-muted/40" />
+                            <p className="font-medium text-foreground">Belum Ada Riwayat</p>
+                            <p className="text-sm text-muted">Belum ada booking ruangan.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-border bg-surface-hover/50 text-left text-xs font-semibold uppercase tracking-wider text-muted">
+                                        <th className="px-6 py-3">#</th>
+                                        <th className="px-6 py-3">Pemohon</th>
+                                        <th className="px-6 py-3">Ruangan</th>
+                                        <th className="px-6 py-3">Tanggal</th>
+                                        <th className="px-6 py-3">Waktu</th>
+                                        <th className="px-6 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {allBookings.map((b, idx) => {
+                                        const cfg = bookingStatusConfig[b.status] || bookingStatusConfig.PENDING;
+                                        const StatusIcon = cfg.icon;
+                                        return (
+                                            <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
+                                                <td className="px-6 py-4 text-sm text-muted">{idx + 1}</td>
+                                                <td className="px-6 py-4">
+                                                    <p className="text-sm font-semibold text-foreground">{b.user.nama}</p>
+                                                    <p className="text-xs text-muted">{b.user.email}</p>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                                        <DoorOpen className="h-3 w-3" />
+                                                        {roomLabels[b.roomName] || b.roomName}
+                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                    {new Date(b.bookingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                                </td>
+                                                <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                    {b.startTime} — {b.endTime}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color}`}>
+                                                        <StatusIcon className="h-3 w-3" />
+                                                        {cfg.label}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
         );
     }
 
+    // ──────────────────────────────────────────────────
     // MAHASISWA VIEW
+    // ──────────────────────────────────────────────────
     const borrowings = await prisma.borrowing.findMany({
         where: { userId: session.user.id },
         include: {
             asset: { select: { namaAlat: true, barcode: true } },
         },
         orderBy: { tglPinjam: "desc" },
+    });
+
+    const roomBookings = await prisma.roomBooking.findMany({
+        where: { userId: session.user.id },
+        orderBy: { bookingDate: "desc" },
     });
 
     return (
@@ -227,7 +476,7 @@ export default async function DashboardPage() {
                             Dashboard Saya
                         </h1>
                         <p className="text-sm text-muted">
-                            Halo, {session.user.nama} — Berikut riwayat peminjaman Anda.
+                            Halo, {session.user.nama} — Berikut riwayat aktivitas Anda.
                         </p>
                     </div>
                 </div>
@@ -241,14 +490,9 @@ export default async function DashboardPage() {
                         const Icon = cfg.icon;
                         const count = borrowings.filter((b) => b.status === status).length;
                         return (
-                            <div
-                                key={status}
-                                className="rounded-2xl border border-border bg-surface p-4 shadow-sm"
-                            >
+                            <div key={status} className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
                                 <div className="flex items-center gap-2.5">
-                                    <div
-                                        className={`flex h-9 w-9 items-center justify-center rounded-xl ${cfg.color}`}
-                                    >
+                                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${cfg.color}`}>
                                         <Icon className="h-4 w-4" />
                                     </div>
                                     <div>
@@ -262,25 +506,20 @@ export default async function DashboardPage() {
                 )}
             </div>
 
-            {/* Borrowing History Table */}
-            <div className="rounded-2xl border border-border bg-surface shadow-sm">
+            {/* Equipment Borrowing History */}
+            <div className="mb-8 rounded-2xl border border-border bg-surface shadow-sm">
                 <div className="border-b border-border px-6 py-4">
                     <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
                         <Clock className="h-5 w-5 text-primary" />
-                        Riwayat Peminjaman
+                        Riwayat Peminjaman Alat
                     </h2>
-                    <p className="text-sm text-muted">
-                        Semua catatan peminjaman alat laboratorium Anda
-                    </p>
+                    <p className="text-sm text-muted">Semua catatan peminjaman alat laboratorium Anda</p>
                 </div>
-
                 {borrowings.length === 0 ? (
                     <div className="flex flex-col items-center py-16">
                         <Inbox className="mb-3 h-10 w-10 text-muted/40" />
                         <p className="font-medium text-foreground">Belum Ada Riwayat</p>
-                        <p className="text-sm text-muted">
-                            Anda belum pernah mengajukan peminjaman.
-                        </p>
+                        <p className="text-sm text-muted">Anda belum pernah mengajukan peminjaman.</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -290,39 +529,92 @@ export default async function DashboardPage() {
                                     <th className="px-6 py-3">#</th>
                                     <th className="px-6 py-3">Nama Alat</th>
                                     <th className="px-6 py-3">Barcode</th>
-                                    <th className="px-6 py-3">Tanggal Pinjam</th>
+                                    <th className="px-6 py-3">Tgl Pinjam</th>
+                                    <th className="px-6 py-3">Tgl Kembali</th>
                                     <th className="px-6 py-3">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {borrowings.map((b, idx) => {
-                                    const cfg = statusConfig[b.status];
+                                    const cfg = statusConfig[b.status] || statusConfig.PENDING;
                                     const StatusIcon = cfg.icon;
                                     return (
-                                        <tr
-                                            key={b.id}
-                                            className="transition-colors hover:bg-surface-hover/30"
-                                        >
-                                            <td className="px-6 py-4 text-sm text-muted">
-                                                {idx + 1}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm font-medium text-foreground">
-                                                {b.asset.namaAlat}
-                                            </td>
-                                            <td className="px-6 py-4 font-mono text-xs text-muted">
-                                                {b.asset.barcode}
+                                        <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
+                                            <td className="px-6 py-4 text-sm text-muted">{idx + 1}</td>
+                                            <td className="px-6 py-4 text-sm font-medium text-foreground">{b.asset.namaAlat}</td>
+                                            <td className="px-6 py-4 font-mono text-xs text-muted">{b.asset.barcode}</td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {new Date(b.tglPinjam).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                                             </td>
                                             <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
-                                                {new Date(b.tglPinjam).toLocaleDateString("id-ID", {
-                                                    day: "numeric",
-                                                    month: "short",
-                                                    year: "numeric",
-                                                })}
+                                                {b.returnedDate
+                                                    ? new Date(b.returnedDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+                                                    : "—"
+                                                }
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span
-                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color}`}
-                                                >
+                                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color}`}>
+                                                    <StatusIcon className="h-3 w-3" />
+                                                    {cfg.label}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Room Booking History */}
+            <div className="rounded-2xl border border-border bg-surface shadow-sm">
+                <div className="border-b border-border px-6 py-4">
+                    <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                        <CalendarDays className="h-5 w-5 text-purple-500" />
+                        Riwayat Booking Ruangan
+                    </h2>
+                    <p className="text-sm text-muted">Semua catatan pemesanan ruang laboratorium Anda</p>
+                </div>
+                {roomBookings.length === 0 ? (
+                    <div className="flex flex-col items-center py-16">
+                        <DoorOpen className="mb-3 h-10 w-10 text-muted/40" />
+                        <p className="font-medium text-foreground">Belum Ada Booking</p>
+                        <p className="text-sm text-muted">Anda belum pernah melakukan booking ruangan.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-border bg-surface-hover/50 text-left text-xs font-semibold uppercase tracking-wider text-muted">
+                                    <th className="px-6 py-3">#</th>
+                                    <th className="px-6 py-3">Ruangan</th>
+                                    <th className="px-6 py-3">Tanggal</th>
+                                    <th className="px-6 py-3">Waktu</th>
+                                    <th className="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {roomBookings.map((b, idx) => {
+                                    const cfg = bookingStatusConfig[b.status] || bookingStatusConfig.PENDING;
+                                    const StatusIcon = cfg.icon;
+                                    return (
+                                        <tr key={b.id} className="transition-colors hover:bg-surface-hover/30">
+                                            <td className="px-6 py-4 text-sm text-muted">{idx + 1}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                                    <DoorOpen className="h-3 w-3" />
+                                                    {roomLabels[b.roomName] || b.roomName}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {new Date(b.bookingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                            </td>
+                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-muted">
+                                                {b.startTime} — {b.endTime}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color}`}>
                                                     <StatusIcon className="h-3 w-3" />
                                                     {cfg.label}
                                                 </span>
