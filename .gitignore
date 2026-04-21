@@ -44,4 +44,5 @@ app/generated/prisma
 
 .agents
 .claude
-prisma/migrations/*init
+prisma/migrations/*
+!prisma/migrations/migration_lock.toml

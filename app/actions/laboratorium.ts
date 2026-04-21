@@ -12,7 +12,7 @@ type RoomName = (typeof VALID_ROOMS)[number];
 // Equipment Borrowing Actions
 // ──────────────────────────────────────────────────────
 
-export async function ajukanPinjaman(assetId: string) {
+export async function ajukanPinjaman(assetCategoryId: string) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -23,27 +23,33 @@ export async function ajukanPinjaman(assetId: string) {
 
     try {
         const borrowing = await prisma.$transaction(async (tx) => {
-            const asset = await tx.asset.findUnique({
-                where: { id: assetId },
+            // Find an available item within the category
+            const availableItem = await tx.assetItem.findFirst({
+                where: {
+                    categoryId: assetCategoryId,
+                    kondisi: "BAIK",
+                    isAvailable: true,
+                },
+                orderBy: {
+                    createdAt: "asc", // Prioritize older items
+                },
             });
 
-            if (!asset) {
-                throw new Error("Alat tidak ditemukan.");
+            if (!availableItem) {
+                throw new Error("Maaf, tidak ada alat yang tersedia atau dalam kondisi baik di kategori ini.");
             }
 
-            if (asset.stokTersedia <= 0) {
-                throw new Error("Maaf, stok alat ini sedang tidak tersedia.");
-            }
-
-            await tx.asset.update({
-                where: { id: assetId },
-                data: { stokTersedia: { decrement: 1 } },
+            // Mark the item as unavailable
+            await tx.assetItem.update({
+                where: { id: availableItem.id },
+                data: { isAvailable: false },
             });
 
+            // Create the borrowing record, linking to the specific AssetItem
             return tx.borrowing.create({
                 data: {
                     userId,
-                    assetId,
+                    assetItemId: availableItem.id, // Link to AssetItem
                     status: "PENDING",
                 },
             });
@@ -89,6 +95,7 @@ export async function tolakPinjaman(borrowingId: string) {
         await prisma.$transaction(async (tx) => {
             const borrowing = await tx.borrowing.findUnique({
                 where: { id: borrowingId },
+                include: { assetItem: true }, // Include the related AssetItem
             });
 
             if (!borrowing) {
@@ -100,10 +107,13 @@ export async function tolakPinjaman(borrowingId: string) {
                 data: { status: "DITOLAK" },
             });
 
-            await tx.asset.update({
-                where: { id: borrowing.assetId },
-                data: { stokTersedia: { increment: 1 } },
-            });
+            // If a specific item was borrowed, make it available again
+            if (borrowing.assetItem) {
+                await tx.assetItem.update({
+                    where: { id: borrowing.assetItem.id },
+                    data: { isAvailable: true },
+                });
+            }
         });
 
         revalidatePath("/dashboard");
@@ -128,6 +138,7 @@ export async function returnEquipment(borrowingId: string) {
         await prisma.$transaction(async (tx) => {
             const borrowing = await tx.borrowing.findUnique({
                 where: { id: borrowingId },
+                include: { assetItem: true }, // Include the related AssetItem
             });
 
             if (!borrowing) {
@@ -146,10 +157,13 @@ export async function returnEquipment(borrowingId: string) {
                 },
             });
 
-            await tx.asset.update({
-                where: { id: borrowing.assetId },
-                data: { stokTersedia: { increment: 1 } },
-            });
+            // Make the item available again
+            if (borrowing.assetItem) {
+                await tx.assetItem.update({
+                    where: { id: borrowing.assetItem.id },
+                    data: { isAvailable: true },
+                });
+            }
         });
 
         revalidatePath("/");

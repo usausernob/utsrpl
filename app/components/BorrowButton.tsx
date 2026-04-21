@@ -6,17 +6,17 @@ import { ajukanPinjaman } from "@/app/actions/laboratorium";
 import { Send, Loader2 } from "lucide-react";
 
 interface BorrowButtonProps {
-    assetId: string;
+    assetCategoryId: string; // Changed from assetId
     disabled: boolean;
 }
 
-export default function BorrowButton({ assetId, disabled }: BorrowButtonProps) {
+export default function BorrowButton({ assetCategoryId, disabled }: BorrowButtonProps) { // Changed from assetId
     const [isPending, startTransition] = useTransition();
     const router = useRouter();
 
     const handleBorrow = () => {
         startTransition(async () => {
-            const result = await ajukanPinjaman(assetId);
+            const result = await ajukanPinjaman(assetCategoryId); // Changed from assetId
 
             if (!result.success) {
                 if (result.error?.includes("login")) {

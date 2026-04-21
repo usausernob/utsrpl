@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../app/generated/prisma"
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 enum Role {
@@ -51,27 +51,39 @@ model User {
   updatedAt    DateTime      @updatedAt
 }
 
-model Asset {
-  id             String      @id @default(cuid())
-  barcode        String      @unique
-  namaAlat       String
-  stokTotal      Int         @default(1)
-  stokTersedia   Int         @default(1)
-  kondisi        Kondisi     @default(BAIK)
-  borrowings     Borrowing[]
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+model AssetCategory {
+  id          String      @id @default(cuid())
+  nama        String      @unique
+  deskripsi   String?
+  prefix      String      @unique
+  items       AssetItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model AssetItem {
+  id          String         @id @default(cuid())
+  categoryId  String
+  nomorUrut   String         // Contoh: "012"
+  kondisi     Kondisi        @default(BAIK)
+  isAvailable Boolean        @default(true)
+  category    AssetCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  borrowings  Borrowing[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([categoryId, nomorUrut])
 }
 
 model Borrowing {
   id           String         @id @default(cuid())
   userId       String
-  assetId      String
+  assetItemId  String
   tglPinjam    DateTime       @default(now())
   returnedDate DateTime?
   status       StatusPinjaman @default(PENDING)
   user         User           @relation(fields: [userId], references: [id])
-  asset        Asset          @relation(fields: [assetId], references: [id])
+  assetItem    AssetItem      @relation(fields: [assetItemId], references: [id])
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }

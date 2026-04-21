@@ -5,12 +5,8 @@ import PageTabs from "@/app/components/PageTabs";
 import RoomBookingSection from "@/app/components/RoomBookingSection";
 import {
     FlaskConical,
-    Barcode,
     Package,
-    ShieldCheck,
-    ShieldAlert,
     Sparkles,
-    DoorOpen,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -23,19 +19,43 @@ export default async function Home({ searchParams }: PageProps) {
     const { q, tab } = await searchParams;
     const activeTab = tab || "equipment";
 
-    const assets = activeTab === "equipment"
-        ? await prisma.asset.findMany({
-            where: q
-                ? {
-                    OR: [
-                        { namaAlat: { contains: q, mode: "insensitive" } },
-                        { barcode: { contains: q, mode: "insensitive" } },
-                    ],
-                }
-                : undefined,
-            orderBy: { namaAlat: "asc" },
-        })
-        : [];
+    const assetCategories =
+        activeTab === "equipment"
+            ? await prisma.assetCategory.findMany({
+                  where: q
+                      ? {
+                            OR: [
+                                { nama: { contains: q, mode: "insensitive" } },
+                                { deskripsi: { contains: q, mode: "insensitive" } },
+                            ],
+                        }
+                      : undefined,
+                  include: {
+                      items: {
+                          select: {
+                              id: true,
+                              kondisi: true,
+                              isAvailable: true,
+                          },
+                      },
+                  },
+                  orderBy: { nama: "asc" },
+              })
+            : [];
+
+    // Calculate stock for each category
+    const categoriesWithStock = assetCategories.map((category) => {
+        const totalStock = category.items.length;
+        const availableStock = category.items.filter(
+            (item) => item.kondisi === "BAIK" && item.isAvailable
+        ).length;
+        return {
+            ...category,
+            totalStock,
+            availableStock,
+        };
+    });
+
 
     return (
         <div className="min-h-screen">
@@ -82,7 +102,7 @@ export default async function Home({ searchParams }: PageProps) {
                     {activeTab === "equipment" && (
                         <div className="hidden items-center gap-2 rounded-lg bg-surface-hover px-3 py-1.5 text-sm text-muted sm:flex">
                             <Package className="h-4 w-4" />
-                            Total: {assets.length} item
+                            Total Kategori: {categoriesWithStock.length}
                         </div>
                     )}
                 </div>
@@ -95,25 +115,25 @@ export default async function Home({ searchParams }: PageProps) {
                                 Katalog Alat
                             </h2>
                             <p className="mt-1 text-sm text-muted">
-                                {assets.length} alat tersedia di laboratorium
+                                {categoriesWithStock.length} kategori alat tersedia di laboratorium
                             </p>
                         </div>
 
-                        {assets.length === 0 ? (
+                        {categoriesWithStock.length === 0 ? (
                             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-24">
                                 <FlaskConical className="mb-4 h-12 w-12 text-muted/40" />
                                 <h3 className="text-lg font-semibold text-foreground">
-                                    Belum Ada Aset
+                                    Belum Ada Kategori Aset
                                 </h3>
                                 <p className="mt-1 text-sm text-muted">
-                                    Data aset laboratorium belum tersedia.
+                                    Data kategori aset laboratorium belum tersedia.
                                 </p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                                {assets.map((asset) => (
+                                {categoriesWithStock.map((category) => (
                                     <div
-                                        key={asset.id}
+                                        key={category.id}
                                         className="group relative flex flex-col rounded-2xl border border-border bg-surface p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5"
                                     >
                                         {/* Header */}
@@ -121,45 +141,29 @@ export default async function Home({ searchParams }: PageProps) {
                                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-accent/10">
                                                 <FlaskConical className="h-5 w-5 text-primary" />
                                             </div>
-                                            <span
-                                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${asset.kondisi === "BAIK"
-                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                                    : "bg-red-500/10 text-red-600 dark:text-red-400"
-                                                    }`}
-                                            >
-                                                {asset.kondisi === "BAIK" ? (
-                                                    <ShieldCheck className="h-3 w-3" />
-                                                ) : (
-                                                    <ShieldAlert className="h-3 w-3" />
-                                                )}
-                                                {asset.kondisi}
-                                            </span>
+                                            {/* Removed Kondisi display for category */}
                                         </div>
 
                                         {/* Info */}
                                         <h3 className="mb-1 text-lg font-bold text-foreground">
-                                            {asset.namaAlat}
+                                            {category.nama}
                                         </h3>
-
-                                        <div className="mb-4 flex items-center gap-1.5 text-sm text-muted">
-                                            <Barcode className="h-3.5 w-3.5" />
-                                            <span className="font-mono text-xs">{asset.barcode}</span>
-                                        </div>
+                                        <p className="mb-4 text-sm text-muted-foreground">{category.deskripsi}</p>
 
                                         {/* Stock */}
                                         <div className="mb-4 flex items-center justify-between rounded-xl bg-surface-hover p-3">
                                             <span className="text-sm text-muted">Stok Tersedia</span>
                                             <div className="flex items-baseline gap-1">
                                                 <span
-                                                    className={`text-xl font-bold ${asset.stokTersedia > 0
+                                                    className={`text-xl font-bold ${category.availableStock > 0
                                                         ? "text-primary"
                                                         : "text-red-500"
                                                         }`}
                                                 >
-                                                    {asset.stokTersedia}
+                                                    {category.availableStock}
                                                 </span>
                                                 <span className="text-xs text-muted">
-                                                    / {asset.stokTotal}
+                                                    / {category.totalStock}
                                                 </span>
                                             </div>
                                         </div>
@@ -167,8 +171,8 @@ export default async function Home({ searchParams }: PageProps) {
                                         {/* Borrow Button */}
                                         <div className="mt-auto">
                                             <BorrowButton
-                                                assetId={asset.id}
-                                                disabled={asset.stokTersedia <= 0}
+                                                assetCategoryId={category.id} // Pass category ID
+                                                disabled={category.availableStock <= 0}
                                             />
                                         </div>
                                     </div>

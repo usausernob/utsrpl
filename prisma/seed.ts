@@ -10,12 +10,14 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
     console.log("🌱 Seeding database...\n");
 
-    // Clean existing data
+    // Clean existing data (order matters for FK constraints)
     await prisma.borrowing.deleteMany();
-    await prisma.asset.deleteMany();
+    await prisma.assetItem.deleteMany();
+    await prisma.assetCategory.deleteMany();
+    await prisma.roomBooking.deleteMany();
     await prisma.user.deleteMany();
 
-    // Create users
+    // ─── Users ───────────────────────────────────────────────────────────────
     const hashedPassword = await hash("password123", 10);
 
     const mahasiswa = await prisma.user.create({
@@ -50,142 +52,177 @@ async function main() {
     console.log(`   - ${laboran.nama} (${laboran.role})`);
     console.log(`   - ${kepalaLab.nama} (${kepalaLab.role})`);
 
-    // Create computer lab assets
-    const assets = await Promise.all([
-        prisma.asset.create({
+    // ─── Asset Categories ─────────────────────────────────────────────────────
+    const categories = await Promise.all([
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-PC-001",
-                namaAlat: "PC Desktop All-in-One",
-                stokTotal: 20,
-                stokTersedia: 18,
-                kondisi: "BAIK",
+                nama: "PC Desktop All-in-One",
+                deskripsi: "Komputer desktop all-in-one untuk kebutuhan praktikum",
+                prefix: "PC",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-LPT-002",
-                namaAlat: "Laptop ASUS VivoBook",
-                stokTotal: 10,
-                stokTersedia: 10,
-                kondisi: "BAIK",
+                nama: "Laptop ASUS VivoBook",
+                deskripsi: "Laptop portabel untuk kebutuhan praktikum mobile",
+                prefix: "LPT",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-MON-003",
-                namaAlat: "Monitor LED 24 inch",
-                stokTotal: 20,
-                stokTersedia: 20,
-                kondisi: "BAIK",
+                nama: "Monitor LED 24 inch",
+                deskripsi: "Monitor eksternal 24 inci resolusi Full HD",
+                prefix: "MON",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-KB-004",
-                namaAlat: "Keyboard Mechanical",
-                stokTotal: 25,
-                stokTersedia: 25,
-                kondisi: "BAIK",
+                nama: "Keyboard Mechanical",
+                deskripsi: "Keyboard mekanikal untuk penggunaan intensif",
+                prefix: "KB",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-MS-005",
-                namaAlat: "Mouse Wireless Logitech",
-                stokTotal: 25,
-                stokTersedia: 25,
-                kondisi: "BAIK",
+                nama: "Mouse Wireless Logitech",
+                deskripsi: "Mouse nirkabel ergonomis Logitech",
+                prefix: "MS",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-PRJ-006",
-                namaAlat: "Proyektor Epson",
-                stokTotal: 3,
-                stokTersedia: 2,
-                kondisi: "BAIK",
+                nama: "Proyektor Epson",
+                deskripsi: "Proyektor presentasi Epson untuk ruang kuliah",
+                prefix: "PRJ",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-PRN-007",
-                namaAlat: "Printer LaserJet HP",
-                stokTotal: 4,
-                stokTersedia: 0,
-                kondisi: "RUSAK",
+                nama: "Printer LaserJet HP",
+                deskripsi: "Printer laser HP untuk kebutuhan cetak dokumen",
+                prefix: "PRN",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-HST-008",
-                namaAlat: "Headset USB Logitech",
-                stokTotal: 15,
-                stokTersedia: 15,
-                kondisi: "BAIK",
+                nama: "Headset USB Logitech",
+                deskripsi: "Headset USB Logitech untuk praktikum multimedia",
+                prefix: "HST",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-SWT-009",
-                namaAlat: "Switch Managed 24-Port",
-                stokTotal: 2,
-                stokTersedia: 0,
-                kondisi: "RUSAK",
+                nama: "Switch Managed 24-Port",
+                deskripsi: "Switch jaringan terkelola 24 port untuk lab jaringan",
+                prefix: "SWT",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-RTR-010",
-                namaAlat: "Router MikroTik",
-                stokTotal: 5,
-                stokTersedia: 4,
-                kondisi: "BAIK",
+                nama: "Router MikroTik",
+                deskripsi: "Router MikroTik untuk praktikum jaringan",
+                prefix: "RTR",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-UPS-011",
-                namaAlat: "UPS APC 1200VA",
-                stokTotal: 10,
-                stokTersedia: 10,
-                kondisi: "BAIK",
+                nama: "UPS APC 1200VA",
+                deskripsi: "UPS APC 1200VA untuk proteksi daya perangkat lab",
+                prefix: "UPS",
             },
         }),
-        prisma.asset.create({
+        prisma.assetCategory.create({
             data: {
-                barcode: "LAB-HDD-012",
-                namaAlat: "External HDD 1TB",
-                stokTotal: 8,
-                stokTersedia: 6,
-                kondisi: "BAIK",
+                nama: "External HDD 1TB",
+                deskripsi: "Hard disk eksternal 1TB untuk penyimpanan data",
+                prefix: "HDD",
             },
         }),
     ]);
 
-    console.log(`\n✅ ${assets.length} assets created (Lab Komputer)`);
+    console.log(`\n✅ ${categories.length} asset categories created`);
 
-    // Create sample borrowings
+    // ─── Asset Items ──────────────────────────────────────────────────────────
+    // Helper to build nomorUrut strings like "001", "002", etc.
+    const pad = (n: number) => String(n).padStart(3, "0");
+
+    // Map: categoryIndex -> { count, kondisi }
+    const itemConfig: { count: number; kondisi: "BAIK" | "RUSAK" }[] = [
+        { count: 20, kondisi: "BAIK" },  // PC Desktop (2 unavailable → handled via borrowing)
+        { count: 10, kondisi: "BAIK" },  // Laptop
+        { count: 20, kondisi: "BAIK" },  // Monitor
+        { count: 25, kondisi: "BAIK" },  // Keyboard
+        { count: 25, kondisi: "BAIK" },  // Mouse
+        { count: 3,  kondisi: "BAIK" },  // Proyektor
+        { count: 4,  kondisi: "RUSAK" }, // Printer (all rusak)
+        { count: 15, kondisi: "BAIK" },  // Headset
+        { count: 2,  kondisi: "RUSAK" }, // Switch (rusak)
+        { count: 5,  kondisi: "BAIK" },  // Router
+        { count: 10, kondisi: "BAIK" },  // UPS
+        { count: 8,  kondisi: "BAIK" },  // HDD
+    ];
+
+    const allItems: { categoryIndex: number; item: Awaited<ReturnType<typeof prisma.assetItem.create>> }[] = [];
+
+    for (let ci = 0; ci < categories.length; ci++) {
+        const { count, kondisi } = itemConfig[ci];
+        for (let i = 1; i <= count; i++) {
+            const item = await prisma.assetItem.create({
+                data: {
+                    categoryId: categories[ci].id,
+                    nomorUrut: pad(i),
+                    kondisi,
+                    isAvailable: kondisi === "BAIK", // RUSAK items start as unavailable
+                },
+            });
+            allItems.push({ categoryIndex: ci, item });
+        }
+    }
+
+    const totalItems = allItems.length;
+    console.log(`✅ ${totalItems} asset items created`);
+
+    // ─── Sample Borrowings ────────────────────────────────────────────────────
+    // Pick first item from Laptop category (index 1)
+    const laptopItems = allItems.filter((x) => x.categoryIndex === 1);
+    // Pick first item from Proyektor category (index 5)
+    const proyektorItems = allItems.filter((x) => x.categoryIndex === 5);
+    // Pick first item from HDD category (index 11)
+    const hddItems = allItems.filter((x) => x.categoryIndex === 11);
+
     await prisma.borrowing.create({
         data: {
             userId: mahasiswa.id,
-            assetId: assets[1].id, // Laptop
+            assetItemId: laptopItems[0].item.id,
             status: "PENDING",
         },
     });
 
-    await prisma.borrowing.create({
-        data: {
-            userId: mahasiswa.id,
-            assetId: assets[5].id, // Proyektor
-            status: "DIPINJAM",
-        },
+    // Mark the borrowed laptop as unavailable
+    await prisma.assetItem.update({
+        where: { id: laptopItems[0].item.id },
+        data: { isAvailable: false },
     });
 
     await prisma.borrowing.create({
         data: {
             userId: mahasiswa.id,
-            assetId: assets[11].id, // External HDD
+            assetItemId: proyektorItems[0].item.id,
+            status: "DIPINJAM",
+        },
+    });
+
+    await prisma.assetItem.update({
+        where: { id: proyektorItems[0].item.id },
+        data: { isAvailable: false },
+    });
+
+    await prisma.borrowing.create({
+        data: {
+            userId: mahasiswa.id,
+            assetItemId: hddItems[0].item.id,
             status: "SELESAI",
+            returnedDate: new Date(),
         },
     });
 
