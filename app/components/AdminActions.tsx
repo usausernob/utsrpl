@@ -1,8 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { setujuiPinjaman, tolakPinjaman } from "@/app/actions/laboratorium";
 import { Check, X, Loader2 } from "lucide-react";
+import NotificationModal, { NotificationType } from "./NotificationModal";
 
 interface AdminActionsProps {
     borrowingId: string;
@@ -11,6 +12,17 @@ interface AdminActionsProps {
 export default function AdminActions({ borrowingId }: AdminActionsProps) {
     const [isApproving, startApprove] = useTransition();
     const [isRejecting, startReject] = useTransition();
+    const [notification, setNotification] = useState<{
+        isOpen: boolean;
+        type: NotificationType;
+        title: string;
+        message: string;
+    }>({
+        isOpen: false,
+        type: "success",
+        title: "",
+        message: ""
+    });
 
     return (
         <div className="flex items-center gap-2">
@@ -19,7 +31,12 @@ export default function AdminActions({ borrowingId }: AdminActionsProps) {
                     startApprove(async () => {
                         const result = await setujuiPinjaman(borrowingId);
                         if (!result.success) {
-                            alert(result.error || "Gagal menyetujui.");
+                            setNotification({
+                                isOpen: true,
+                                type: "error",
+                                title: "Gagal",
+                                message: result.error || "Gagal menyetujui."
+                            });
                         }
                     })
                 }
@@ -38,7 +55,12 @@ export default function AdminActions({ borrowingId }: AdminActionsProps) {
                     startReject(async () => {
                         const result = await tolakPinjaman(borrowingId);
                         if (!result.success) {
-                            alert(result.error || "Gagal menolak.");
+                            setNotification({
+                                isOpen: true,
+                                type: "error",
+                                title: "Gagal",
+                                message: result.error || "Gagal menolak."
+                            });
                         }
                     })
                 }
@@ -52,6 +74,15 @@ export default function AdminActions({ borrowingId }: AdminActionsProps) {
                 )}
                 Tolak
             </button>
+
+            <NotificationModal
+                isOpen={notification.isOpen}
+                type={notification.type}
+                title={notification.title}
+                message={notification.message}
+                onConfirm={() => setNotification({ ...notification, isOpen: false })}
+                onCancel={() => setNotification({ ...notification, isOpen: false })}
+            />
         </div>
     );
 }

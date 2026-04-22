@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { createAssetCategory, updateAssetCategory, deleteAssetCategory, createAssetItem, updateAssetItem, deleteAssetItem } from "@/app/actions/asset";
 import { Plus, Edit, Trash2, Loader2, FlaskConical, Package, Barcode } from "lucide-react";
+import NotificationModal, { NotificationType } from "./NotificationModal";
 
 interface AssetItem {
     id: string;
@@ -52,6 +53,20 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
     const [newItemNomorUrut, setNewItemNomorUrut] = useState("");
     
     const [error, setError] = useState<string | null>(null);
+
+    // Notification state
+    const [notification, setNotification] = useState<{
+        isOpen: boolean;
+        type: NotificationType;
+        title: string;
+        message: string;
+        onConfirm?: () => void;
+    }>({
+        isOpen: false,
+        type: "success",
+        title: "",
+        message: ""
+    });
 
     const addEditDialogRef = useRef<HTMLDialogElement>(null);
     const deleteDialogRef = useRef<HTMLDialogElement>(null);
@@ -116,26 +131,47 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
         startTransition(async () => {
             const result = await updateAssetItem(itemId, kondisi, isAvailable);
             if (result.success) {
-                // Refresh local state or just let the page revalidate
-                // Since this is a client component in a server page, revalidatePath will refresh the 'categories' prop
                 if (foundItem) {
                     setFoundItem({ ...foundItem, kondisi, isAvailable });
                 }
             } else {
-                setError(result.error || "Gagal memperbarui item.");
+                setNotification({
+                    isOpen: true,
+                    type: "error",
+                    title: "Gagal",
+                    message: result.error || "Gagal memperbarui item."
+                });
             }
         });
     };
 
     const handleDeleteItem = async (itemId: string) => {
-        if (!window.confirm("Apakah Anda yakin ingin menghapus item ini?")) return;
-        startTransition(async () => {
-            const result = await deleteAssetItem(itemId);
-            if (result.success) {
-                setFoundItem(null);
-                setLookupId("");
-            } else {
-                setError(result.error || "Gagal menghapus item.");
+        setNotification({
+            isOpen: true,
+            type: "confirm",
+            title: "Hapus Item",
+            message: "Apakah Anda yakin ingin menghapus item ini?",
+            onConfirm: () => {
+                startTransition(async () => {
+                    const result = await deleteAssetItem(itemId);
+                    if (result.success) {
+                        setFoundItem(null);
+                        setLookupId("");
+                        setNotification({
+                            isOpen: true,
+                            type: "success",
+                            title: "Berhasil",
+                            message: "Item berhasil dihapus."
+                        });
+                    } else {
+                        setNotification({
+                            isOpen: true,
+                            type: "error",
+                            title: "Gagal",
+                            message: result.error || "Gagal menghapus item."
+                        });
+                    }
+                });
             }
         });
     };
@@ -176,6 +212,12 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
 
             if (result.success) {
                 closeAddEditDialog();
+                setNotification({
+                    isOpen: true,
+                    type: "success",
+                    title: "Berhasil",
+                    message: currentCategory ? "Kategori berhasil diperbarui." : "Kategori baru berhasil ditambahkan."
+                });
             } else {
                 setError(result.error || "Terjadi kesalahan.");
             }
@@ -190,6 +232,12 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
             const result = await deleteAssetCategory(currentCategory.id);
             if (result.success) {
                 closeDeleteDialog();
+                setNotification({
+                    isOpen: true,
+                    type: "success",
+                    title: "Berhasil",
+                    message: "Kategori berhasil dihapus."
+                });
             } else {
                 setError(result.error || "Gagal menghapus kategori.");
             }
@@ -278,7 +326,7 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
             </div>
 
             {/* Manage Items Dialog */}
-            <dialog ref={manageItemsDialogRef} className="rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-full max-w-lg mx-auto">
+            <dialog ref={manageItemsDialogRef} className="fixed inset-0 m-auto rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-[calc(100%-2rem)] max-w-lg overflow-hidden focus:outline-none">
                 <div className="grid gap-6">
                     <div className="flex justify-between items-start">
                         <div>
@@ -296,10 +344,12 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
                                 </div>
                                 <input
                                     type="text"
+                                    id="lookupId"
+                                    name="lookupId"
                                     placeholder="Cari ID (001...)"
                                     value={lookupId}
                                     onChange={(e) => handleLookup(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                                    className="w-full pl-16 pr-3 py-2.5 bg-surface border border-border rounded-xl text-sm font-mono focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                                    className="w-full pl-16 pr-3 py-2.5 bg-surface border border-border rounded-xl text-sm font-mono text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none"
                                 />
                             </div>
                             <button 
@@ -330,22 +380,26 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-muted mb-1.5">Kondisi</label>
+                                        <label htmlFor="itemKondisi" className="block text-xs font-medium text-muted mb-1.5">Kondisi</label>
                                         <select
+                                            id="itemKondisi"
+                                            name="kondisi"
                                             value={foundItem.kondisi}
                                             onChange={(e) => handleUpdateItem(foundItem.id, e.target.value as "BAIK" | "RUSAK", foundItem.isAvailable)}
-                                            className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                            className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                         >
                                             <option value="BAIK">BAIK</option>
                                             <option value="RUSAK">RUSAK</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-muted mb-1.5">Status</label>
+                                        <label htmlFor="itemStatus" className="block text-xs font-medium text-muted mb-1.5">Status</label>
                                         <select
+                                            id="itemStatus"
+                                            name="isAvailable"
                                             value={foundItem.isAvailable ? "available" : "unavailable"}
                                             onChange={(e) => handleUpdateItem(foundItem.id, foundItem.kondisi, e.target.value === "available")}
-                                            className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                            className="w-full bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                         >
                                             <option value="available">Tersedia</option>
                                             <option value="unavailable">Tidak Tersedia</option>
@@ -383,7 +437,7 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
             </dialog>
 
             {/* Add/Edit Category Dialog */}
-            <dialog ref={addEditDialogRef} className="rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-full max-w-lg mx-auto">
+            <dialog ref={addEditDialogRef} className="fixed inset-0 m-auto rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-[calc(100%-2rem)] max-w-lg overflow-hidden focus:outline-none">
                 <div className="grid gap-4">
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-foreground">{currentCategory ? "Edit Kategori Aset" : "Tambah Kategori Aset Baru"}</h3>
@@ -396,23 +450,25 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
                             <input
                                 type="text"
                                 id="categoryName"
+                                name="categoryName"
                                 placeholder="Ex: Printer Epson L3110"
                                 value={categoryName}
                                 onChange={(e) => setCategoryName(e.target.value)}
                                 disabled={isPending}
                                 required
-                                className="w-full border border-border bg-surface rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                                className="w-full border border-border bg-surface rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none"
                             />
                         </div>
                         <div>
                             <label htmlFor="categoryDescription" className="block text-sm font-medium text-foreground mb-1">Deskripsi</label>
                             <textarea
                                 id="categoryDescription"
+                                name="categoryDescription"
                                 placeholder="Deskripsi Opsional"
                                 value={categoryDescription || ""}
                                 onChange={(e) => setCategoryDescription(e.target.value)}
                                 disabled={isPending}
-                                className="w-full border border-border bg-surface rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 focus:outline-none min-h-[80px] resize-none"
+                                className="w-full border border-border bg-surface rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/50 focus:outline-none min-h-[80px] resize-none"
                             />
                         </div>
                         {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -430,7 +486,7 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
             </dialog>
 
             {/* Delete Confirmation Dialog */}
-            <dialog ref={deleteDialogRef} className="rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-full max-w-md mx-auto">
+            <dialog ref={deleteDialogRef} className="fixed inset-0 m-auto rounded-2xl border border-border bg-surface p-6 shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm w-[calc(100%-2rem)] max-w-md overflow-hidden focus:outline-none">
                 <div className="grid gap-4">
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-foreground">Hapus Kategori Aset</h3>
@@ -452,6 +508,18 @@ export default function AssetCategoryManagement({ categories }: AssetCategoryMan
                     </div>
                 </div>
             </dialog>
+
+            <NotificationModal
+                isOpen={notification.isOpen}
+                type={notification.type}
+                title={notification.title}
+                message={notification.message}
+                onConfirm={() => {
+                    if (notification.onConfirm) notification.onConfirm();
+                    setNotification({ ...notification, isOpen: false });
+                }}
+                onCancel={() => setNotification({ ...notification, isOpen: false })}
+            />
         </div>
     );
 }

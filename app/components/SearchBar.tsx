@@ -25,6 +25,8 @@ export default function SearchBar() {
         <div className="group relative">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted transition-colors group-focus-within:text-primary" />
             <input
+                id="search"
+                name="q"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

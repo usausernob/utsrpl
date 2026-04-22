@@ -83,9 +83,13 @@ model Borrowing {
   returnedDate DateTime?
   status       StatusPinjaman @default(PENDING)
   user         User           @relation(fields: [userId], references: [id])
-  assetItem    AssetItem      @relation(fields: [assetItemId], references: [id])
+  assetItem    AssetItem      @relation(fields: [assetItemId], references: [id], onDelete: Cascade)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([assetItemId])
+  @@index([status])
 }
 
 model RoomBooking {
@@ -99,4 +103,9 @@ model RoomBooking {
   user        User          @relation(fields: [userId], references: [id])
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([roomName])
+  @@index([status])
+  @@index([bookingDate])
 }
